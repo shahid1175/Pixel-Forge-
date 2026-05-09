@@ -1,6 +1,6 @@
 {
   "name": "PixelForge - Free Online Image Tools",
-  "description": "Professional image toolkit with AI Upscaling (up to 4K), Background Removal, Watermark Removal, compression, and more. 100% private, browser-based processing.",
+  "description": "Professional image toolkit with AI Image Generation, AI Upscaling (up to 4K), Background Removal, Watermark Removal, compression, and more. 100% private, browser-based processing.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

@@ -5,12 +5,13 @@ import { cn } from '../lib/utils';
 import heic2any from 'heic2any';
 import confetti from 'canvas-confetti';
 
-const FORMATS = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+const FORMATS = ['auto', 'image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
 
 export default function Converter({ initialFormat }: { initialFormat?: string }) {
   const [file, setFile] = useState<File | null>(null);
-  const [targetType, setTargetType] = useState(initialFormat || 'image/png');
+  const [targetType, setTargetType] = useState(initialFormat || 'auto');
   const [convertedBlob, setConvertedBlob] = useState<Blob | null>(null);
+  const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -18,6 +19,7 @@ export default function Converter({ initialFormat }: { initialFormat?: string })
     if (selected) {
       setFile(selected);
       setConvertedBlob(null);
+      setDetectedFormat(null);
     }
   }, []);
 
@@ -31,9 +33,26 @@ export default function Converter({ initialFormat }: { initialFormat?: string })
     multiple: false
   } as any);
 
+  const detectBestFormat = (ctx: CanvasRenderingContext2D, width: number, height: number): string => {
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+    let hasAlpha = false;
+    
+    // Check for transparency by sampling pixels
+    // We sample every 10th pixel for performance
+    for (let i = 3; i < imageData.length; i += 40) {
+      if (imageData[i] < 255) {
+        hasAlpha = true;
+        break;
+      }
+    }
+
+    return hasAlpha ? 'image/png' : 'image/jpeg';
+  };
+
   const convert = async () => {
     if (!file) return;
     setIsProcessing(true);
+    setDetectedFormat(null);
 
     try {
       let sourceBlob: Blob = file;
@@ -70,19 +89,29 @@ export default function Converter({ initialFormat }: { initialFormat?: string })
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         
-        if (targetType === 'image/jpeg') {
-          ctx!.fillStyle = '#FFFFFF';
-          ctx!.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+
+        let finalType = targetType;
+        if (targetType === 'auto') {
+          finalType = detectBestFormat(ctx, canvas.width, canvas.height);
+          setDetectedFormat(finalType);
         }
         
-        ctx?.drawImage(img, 0, 0);
+        // Re-draw if JPEG and we need a white background (for transparency to non-transparency conversion)
+        if (finalType === 'image/jpeg') {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+        }
         
         canvas.toBlob((blob) => {
           setConvertedBlob(blob);
           setIsProcessing(false);
           confetti({ particleCount: 80, spread: 60 });
-        }, targetType, 0.95);
+        }, finalType, 0.95);
       };
     } catch (err) {
       console.error(err);
@@ -122,18 +151,28 @@ export default function Converter({ initialFormat }: { initialFormat?: string })
              </div>
 
              <div className="bg-white p-4 rounded-3xl border-2 border-emerald-500 shadow-xl w-full md:w-auto min-w-[200px]">
-                <p className="text-[10px] uppercase font-bold text-emerald-600 mb-2 px-2">Convert To</p>
+                <div className="flex items-center justify-between mb-2 px-2">
+                  <p className="text-[10px] uppercase font-bold text-emerald-600">Convert To</p>
+                  {targetType === 'auto' && (
+                    <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black italic">SMART</span>
+                  )}
+                </div>
                 <div className="flex flex-col gap-1">
                    {FORMATS.map(f => (
                      <button 
                        key={f}
-                       onClick={() => setTargetType(f)}
+                       onClick={() => {
+                         setTargetType(f);
+                         setConvertedBlob(null);
+                         setDetectedFormat(null);
+                       }}
                        className={cn(
-                         "text-left px-3 py-2 rounded-xl text-sm font-bold transition-all",
+                         "text-left px-3 py-2 rounded-xl text-sm font-bold transition-all flex items-center justify-between group",
                          targetType === f ? "bg-emerald-600 text-white" : "hover:bg-slate-50"
                        )}
                      >
-                       {f.replace('image/', '').toUpperCase()}
+                       <span>{f === 'auto' ? 'Auto-Detect' : f.replace('image/', '').toUpperCase()}</span>
+                       {f === 'auto' && targetType !== 'auto' && <Sparkles className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />}
                      </button>
                    ))}
                 </div>
@@ -144,20 +183,33 @@ export default function Converter({ initialFormat }: { initialFormat?: string })
              <button 
                onClick={convert}
                disabled={isProcessing}
-               className="bg-slate-900 text-white px-12 py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl shadow-slate-200"
+               className="bg-slate-900 text-white px-12 py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all disabled:opacity-50 shadow-xl shadow-slate-200 flex items-center gap-3"
              >
-               {isProcessing ? 'Converting...' : 'Start Conversion'}
+               {isProcessing ? (
+                 <RefreshCw className="w-5 h-5 animate-spin" />
+               ) : (
+                 <RefreshCw className="w-5 h-5" />
+               )}
+               {isProcessing ? 'Analyzing & Converting...' : 'Start Conversion'}
              </button>
+
+             {detectedFormat && (
+               <div className="animate-in fade-in slide-in-from-top-2 text-[10px] font-bold text-slate-400 flex items-center gap-2">
+                 <Sparkles className="w-3 h-3 text-amber-400" />
+                 Auto-detected optimal format: <span className="text-emerald-600 uppercase">{detectedFormat.replace('image/', '')}</span>
+               </div>
+             )}
 
              {convertedBlob && (
                <button 
                  onClick={() => {
                    const a = document.createElement('a');
                    a.href = URL.createObjectURL(convertedBlob);
-                   a.download = `pixelbox_${file.name.split('.')[0]}.${targetType.split('/')[1]}`;
+                   const ext = detectedFormat ? detectedFormat.split('/')[1] : targetType.split('/')[1];
+                   a.download = `pixelbox_${file.name.split('.')[0]}.${ext === 'jpeg' ? 'jpg' : ext}`;
                    a.click();
                  }}
-                 className="flex items-center gap-2 text-emerald-600 font-bold hover:underline"
+                 className="flex items-center gap-2 text-emerald-600 font-bold hover:underline animate-bounce"
                >
                  <Download className="w-4 h-4" /> Download Now
                </button>
@@ -166,11 +218,34 @@ export default function Converter({ initialFormat }: { initialFormat?: string })
           
           <div className="pt-8 border-t border-slate-100 flex justify-center gap-8 text-slate-400 text-xs">
              <span className="flex items-center gap-1"><Upload className="w-3 h-3" /> No Uploads</span>
-             <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Batch Ready</span>
+             <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Smart Detection</span>
              <span className="flex items-center gap-1 text-indigo-500"><Download className="w-3 h-3" /> Direct Save</span>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+function Sparkles(props: any) {
+  return (
+    <svg 
+      {...props} 
+      xmlns="http://www.w3.org/2000/svg" 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      <path d="m5 3 1 1" />
+      <path d="m5 21 1-1" />
+      <path d="m21 3-1 1" />
+      <path d="m21 21-1-1" />
+    </svg>
   );
 }

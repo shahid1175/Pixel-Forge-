@@ -36,8 +36,9 @@ import HtmlToImage from './components/HtmlToImage';
 import BackgroundRemover from './components/BackgroundRemover';
 import WatermarkRemover from './components/WatermarkRemover';
 import Upscaler from './components/Upscaler';
+import ImageGenerator from './components/ImageGenerator';
 
-type ToolId = 'compress' | 'resize' | 'convert' | 'crop' | 'edit' | 'picker' | 'watermark' | 'remove-watermark' | 'upscale' | 'meme' | 'html2img' | 'remove-bg' | 'to-jpg' | 'from-jpg' | null;
+type ToolId = 'compress' | 'resize' | 'convert' | 'crop' | 'edit' | 'picker' | 'watermark' | 'remove-watermark' | 'upscale' | 'image-gen' | 'meme' | 'html2img' | 'remove-bg' | 'to-jpg' | 'from-jpg' | null;
 
 interface Tool {
   id: ToolId;
@@ -50,6 +51,15 @@ interface Tool {
 }
 
 const TOOLS: Tool[] = [
+  {
+    id: 'image-gen',
+    name: 'AI Image Gen',
+    description: 'Turn your text into stunning artwork.',
+    icon: <Sparkles className="w-6 h-6" />,
+    color: 'bg-indigo-600',
+    seoTitle: 'AI Image Generator Online',
+    seoText: 'Create unique AI art from text prompts using Gemini 2.5.'
+  },
   {
     id: 'compress',
     name: 'Image Compress',
@@ -194,7 +204,7 @@ export default function App() {
   const activeTool = TOOLS.find(t => t.id === activeToolId);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-blue-100 italic-none">
+    <div className="flex flex-col min-h-screen bg-transparent text-gray-900 font-sans selection:bg-blue-100 italic-none">
       <main className="flex-1">
         <AnimatePresence mode="wait">
           {!activeToolId ? (
@@ -317,6 +327,7 @@ export default function App() {
                 {activeToolId === 'remove-bg' && <BackgroundRemover />}
                 {activeToolId === 'remove-watermark' && <WatermarkRemover />}
                 {activeToolId === 'upscale' && <Upscaler />}
+                {activeToolId === 'image-gen' && <ImageGenerator />}
               </div>
 
               <div className="flex justify-center">
