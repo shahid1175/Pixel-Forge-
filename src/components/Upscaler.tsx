@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Download, Trash2, Maximize2, Sparkles, ShieldAlert, Rocket, Key, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import confetti from 'canvas-confetti';
 
 declare global {
@@ -76,19 +76,17 @@ export default function Upscaler() {
 
     try {
       // Use the selected API key if available, otherwise fallback to default
-      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-      const genAI = new GoogleGenAI({ apiKey });
+      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+      const genAI = new GoogleGenerativeAI(apiKey);
       const base64Data = await fileToBase64(file);
 
       // Select model based on resolution and key availability
-      // gemini-2.5-flash-image is the general model (better for free tier)
-      // gemini-3.1-flash-image-preview is needed for 4K and configurable imageSize
-      const useHighResVendor = resolution !== '1K' || (process.env.API_KEY && hasApiKey);
-      const model = useHighResVendor ? 'gemini-3.1-flash-image-preview' : 'gemini-2.5-flash-image';
+      const modelName = 'gemini-2.0-flash';
+      const model = genAI.getGenerativeModel({ model: modelName });
 
-      const response = await genAI.models.generateContent({
-        model: model,
-        contents: {
+      const result = await model.generateContent({
+        contents: [{
+          role: 'user',
           parts: [
             {
               inlineData: {
@@ -97,17 +95,13 @@ export default function Upscaler() {
               },
             },
             {
-              text: `Upscale this image to ${resolution} resolution. Preserve all original details, colors, and composition perfectly. Enhance the clarity and sharpness without introducing artifacts. The output must be a faithful high-fidelity enhanced version of the source.`,
+              text: `Upscale this image to ${resolution} resolution. Preserve all original details, colors, and composition perfectly. Enhance the clarity and sharpness without introducing artifacts. Return the result as a generated image part.`,
             },
           ],
-        },
-        config: model === 'gemini-3.1-flash-image-preview' ? {
-          imageConfig: {
-            imageSize: resolution,
-          },
-        } : undefined,
+        }]
       });
 
+      const response = result.response;
       let foundImage = false;
       const candidate = response.candidates?.[0];
       if (candidate && candidate.content && candidate.content.parts) {

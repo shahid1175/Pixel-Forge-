@@ -12,7 +12,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import confetti from 'canvas-confetti';
 
 const ASPECT_RATIOS = [
@@ -45,19 +45,19 @@ export default function ImageGenerator() {
     setError(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: {
-          parts: [{ text: prompt }],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: aspectRatio as any,
-          },
-        },
+      const model = ai.getGenerativeModel({ 
+        model: 'gemini-2.0-flash',
       });
+
+      const result = await model.generateContent({
+        contents: [{
+          role: 'user',
+          parts: [{ text: `${prompt} | Output aspect ratio: ${aspectRatio}` }],
+        }]
+      });
+      const response = result.response;
 
       const newImages: string[] = [];
       const parts = response.candidates?.[0]?.content?.parts || [];
